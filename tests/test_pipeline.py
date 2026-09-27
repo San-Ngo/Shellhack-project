@@ -119,3 +119,17 @@ def test_load_detector_by_import_path():
     assert det.gate_coordinates == [(56.0, 26.0), (56.0, 27.0)]
     with pytest.raises(ValueError):
         load_detector("no_colon_here", [(0, 0), (0, 1)])
+
+
+def test_run_stores_full_track_with_source_label_and_no_duplicates_on_replay(snapshots):
+    positions, _ = load_positions(snapshots)
+    conn = init_db(":memory:")
+    first = run(positions, conn, source="simulated")
+    assert first["track_positions_stored"] == len(positions) == 4
+    second = run(positions, conn, source="simulated")
+    assert second["track_positions_stored"] == 0 and second["track_positions_duplicate"] == 4
+    rows = conn.execute("SELECT mmsi, source FROM vessel_positions").fetchall()
+    assert len(rows) == 4 and {r["source"] for r in rows} == {"simulated"}
+    # vessels still holds 1 row per MMSI
+    assert conn.execute("SELECT COUNT(*) FROM vessels").fetchone()[0] == 2
+    conn.close()

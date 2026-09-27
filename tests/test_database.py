@@ -1,8 +1,8 @@
 """Tests for src/database.py. All vessels and crossings here are SIMULATED."""
 import pytest
 
-from src.database import (get_recent_crossings, get_vessel, init_db, insert_crossing,
-                          upsert_vessel)
+from src.database import (get_recent_crossings, get_track, get_vessel, init_db, insert_crossing,
+                          insert_position, upsert_vessel)
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def sim_crossing(**overrides):
 
 def test_init_db_creates_tables(conn):
     names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"vessels", "crossings"} <= names
+    assert {"vessels", "crossings", "vessel_positions"} <= names
 
 
 def test_init_db_is_idempotent_on_file(tmp_path):
@@ -121,3 +121,38 @@ def test_text_is_stored_literally_not_executed(conn):
     evil = "X'); DROP TABLE vessels; --"
     upsert_vessel(conn, sim_vessel(ship_name=evil))
     assert get_vessel(conn, "123456789")["ship_name"] == evil
+
+
+# ---------- vessel_positions (track history) ----------
+
+def test_track_keeps_every_position_oldest_first(conn):
+    assert insert_position(conn, sim_vessel(timestamp_utc="2026-09-26T23:10:00Z", longitude=56.5),
+                           source="simulated")
+    assert insert_position(conn, sim_vessel(), source="simulated")          # older, sent later
+    track = get_track(conn, "123456789")
+    assert [p["timestamp_utc"] for p in track] == ["2026-09-26T23:00:00Z", "2026-09-26T23:10:00Z"]
+    assert [p["longitude"] for p in track] == [56.4, 56.5]
+    assert all(p["source"] == "simulated" and p["ship_type"] is None for p in track)
+
+
+def test_same_position_twice_is_not_duplicated(conn):
+    assert insert_position(conn, sim_vessel()) is True
+    assert insert_position(conn, sim_vessel()) is False
+    assert conn.execute("SELECT COUNT(*) FROM vessel_positions").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("bad", [
+    {"mmsi": None},
+    {"latitude": 95},
+    {"longitude": None},
+    {"timestamp_utc": "2026-09-26T23:00:00"},          # no timezone
+])
+def test_invalid_position_is_rejected_and_not_stored(conn, bad):
+    with pytest.raises(ValueError):
+        insert_position(conn, sim_vessel(**bad))
+    assert conn.execute("SELECT COUNT(*) FROM vessel_positions").fetchone()[0] == 0
+
+
+def test_get_track_unknown_or_invalid_mmsi_is_empty(conn):
+    assert get_track(conn, "999999999") == []
+    assert get_track(conn, None) == []

@@ -1,12 +1,17 @@
-"""GIỜ 3.5–4.5: SQLite storage for latest vessel state and gate crossings.
+"""SQLite storage: latest vessel state, position history (tracks) and gate crossings.
 
-Only the latest position per MMSI is kept (no full history in this version).
+Tables:
+    vessels           latest position per MMSI (1 row per vessel)
+    vessel_positions  every position (track history), 1 row per (mmsi, timestamp_utc)
+    crossings         gate crossings from Person B's detector
 All SQL uses parameters — input is never pasted into SQL strings.
 
 Usage (Person A pipeline and Person B detector):
     from src.database import init_db, upsert_vessel, insert_crossing, get_recent_crossings
     conn = init_db()                         # uses DB_PATH from .env, or pass a path / ":memory:"
     upsert_vessel(conn, position)            # position = shared vessel object (docs/data_contract.md)
+    insert_position(conn, position, source="vesselapi-replay")   # track history
+    get_track(conn, "616002462")             # one vessel's positions, oldest first
     insert_crossing(conn, crossing)          # crossing = object returned by Person B's detector
     get_recent_crossings(conn, limit=20)
 """
@@ -46,6 +51,22 @@ CREATE TABLE IF NOT EXISTS crossings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_crossings_time ON crossings (crossing_time);
+
+CREATE TABLE IF NOT EXISTS vessel_positions (
+    position_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    mmsi             TEXT NOT NULL,
+    ship_name        TEXT,
+    ship_type        INTEGER,          -- NULL = unknown (never guessed)
+    latitude         REAL NOT NULL,
+    longitude        REAL NOT NULL,
+    speed_knots      REAL,
+    course_deg       REAL,
+    timestamp_utc    TEXT NOT NULL,    -- ISO 8601 UTC from the source
+    source           TEXT,             -- "vesselapi-replay" (real) or "simulated"
+    UNIQUE (mmsi, timestamp_utc)       -- replaying the same snapshot adds nothing
+);
+
+CREATE INDEX IF NOT EXISTS idx_positions_time ON vessel_positions (timestamp_utc);
 """
 
 
@@ -164,6 +185,29 @@ def insert_crossing(conn: sqlite3.Connection, crossing: dict,
     return cur.rowcount == 1
 
 
+def insert_position(conn: sqlite3.Connection, position: dict, source: Optional[str] = None) -> bool:
+    """Store one position in the track history (vessel_positions).
+
+    Same validation as upsert_vessel. Returns True if stored, False if the same
+    (mmsi, timestamp_utc) is already there. Raises ValueError for invalid positions.
+    """
+    mmsi = _require_mmsi(position)
+    lat, lon = _coords(position, required=True)
+    ts = _require_time(position.get("timestamp_utc"), "timestamp_utc")
+    cur = conn.execute(
+        """
+        INSERT OR IGNORE INTO vessel_positions
+            (mmsi, ship_name, ship_type, latitude, longitude, speed_knots, course_deg,
+             timestamp_utc, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (mmsi, position.get("ship_name"), _optional_type(position.get("ship_type")), lat, lon,
+         _number(position.get("speed_knots")), _number(position.get("course_deg")), ts, source),
+    )
+    conn.commit()
+    return cur.rowcount == 1
+
+
 # ---------- reads ----------
 
 def get_vessel(conn: sqlite3.Connection, mmsi) -> Optional[dict]:
@@ -178,5 +222,16 @@ def get_recent_crossings(conn: sqlite3.Connection, limit: int = 20) -> list:
     limit = max(1, min(int(limit), 1000))
     rows = conn.execute(
         "SELECT * FROM crossings ORDER BY crossing_time DESC, crossing_id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_track(conn: sqlite3.Connection, mmsi) -> list:
+    """All stored positions of one vessel, oldest first (for drawing its track)."""
+    key = _mmsi(mmsi)
+    if key is None:
+        return []
+    rows = conn.execute(
+        "SELECT * FROM vessel_positions WHERE mmsi = ? ORDER BY timestamp_utc", (key,)
     ).fetchall()
     return [dict(r) for r in rows]

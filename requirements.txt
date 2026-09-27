@@ -1,5 +1,7 @@
 websockets>=12.0
 python-dotenv>=1.0
 pytest>=8.0
-
 shapely
+pymssql>=2.3
+openpyxl>=3.1
+openpyxl>=3.1

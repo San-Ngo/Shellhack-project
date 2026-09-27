@@ -13,7 +13,7 @@ Phần dữ liệu (Người A): nguồn AIS → chuẩn hóa → detector vư�
 | GIỜ 2–3.5: chuẩn hóa (`src/normalizer.py`) | ✅ |
 | GIỜ 3.5–4.5: SQLite (`src/database.py`) | ✅ bảng `vessels`, `crossings` |
 | GIỜ 4.5–5: ghép với Người B (`src/pipeline.py`) | ✅ chạy với `src/crossing_detector.py` của B |
-| GIỜ 5–6: kiểm tra đầu cuối, bàn giao | ✅ 70 ca kiểm thử; **1 lượt vượt thật**; bàn giao: `docs/handover.md` |
+| GIỜ 5–6: kiểm tra đầu cuối, bàn giao | ✅ 70 ca kiểm thử (nay 106); **1 lượt vượt thật**; bàn giao: `docs/handover.md` |
 
 ## Cài đặt
 
@@ -72,8 +72,22 @@ Demo detector bằng dữ liệu **mô phỏng** (tự ghi `source = simulated`)
 python3 -m src.pipeline --snapshots demo/simulated_tracks.jsonl --detector src.crossing_detector:CrossingDetector --gate "56.1,26.10,56.1,26.80"
 ```
 
+- SQLite có 3 bảng: `vessels` (vị trí mới nhất/tàu), `vessel_positions` (toàn bộ đường đi), `crossings` (lượt vượt). Chạy lại không tạo dòng trùng.
 - Cổng theo thứ tự **kinh độ, vĩ độ**. Cổng trên là **cổng tạm** do Người B đề xuất.
 - Kết quả lưu ở `hormuz_watch.db` (không commit).
+
+## Azure SQL + Power BI (cập nhật liên tục)
+
+VesselAPI → chuẩn hóa → detector của Người B → Azure SQL (`vessels_latest`, `crossings`, `vessel_metadata`, `brent_daily`, `ingestion_status`) → Power BI Azure Maps. Hướng dẫn đầy đủ: `docs/azure_setup.md`.
+
+```bash
+python3 -m src.azure_store --check
+```
+```bash
+caffeinate -i python3 -m src.live_ingest --interval 1800
+```
+
+Chưa kiểm tra với Azure SQL thật — xem giới hạn trong `docs/azure_setup.md`.
 
 ## Kiểm thử
 
@@ -81,7 +95,7 @@ python3 -m src.pipeline --snapshots demo/simulated_tracks.jsonl --detector src.c
 python3 -m pytest -q
 ```
 
-Kết quả mong đợi: `70 passed`.
+Kết quả mong đợi: `106 passed`.
 
 ## Dữ liệu thật hay mô phỏng
 
@@ -103,4 +117,5 @@ Kết quả mong đợi: `70 passed`.
 
 - `docs/ais_source.md` — nguồn AIS, trường đã xác minh, nhật ký thử, vùng phủ
 - `docs/data_contract.md` — đối tượng vị trí tàu và lượt vượt dùng chung với Người B
+- `docs/azure_setup.md` — Azure SQL, job định kỳ, Power BI
 - `docs/handover.md` — bàn giao cho Người B: hàm, cấu trúc, cách chạy, lỗi còn tồn tại

@@ -1,5 +1,6 @@
 """Fetch REAL vessel type (tanker or not) from VesselAPI for every MMSI we recorded.
 
+MMSIs come from all real data in samples/ (recorder, live job, history samples).
 The bounding-box endpoint has no ship type, so without this step we cannot say which
 vessels are tankers (and we never guess). Endpoint (VesselAPI API reference):
     GET https://api.vesselapi.com/v1/vessel/{mmsi}?filter.idType=mmsi
@@ -23,12 +24,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.pipeline import load_positions  # noqa: E402
+from src.history import normalize_all, read_sources  # noqa: E402
 from src.vesselapi_recorder import load_key  # noqa: E402
 
 DETAILS_URL = "https://api.vesselapi.com/v1/vessel/{}"
 CACHE = ROOT / "samples" / "vessel_details.jsonl"
-SNAPSHOTS = ROOT / "samples" / "vesselapi_snapshots.jsonl"
 
 
 def load_cache() -> dict:
@@ -62,7 +62,7 @@ def main() -> int:
     p.add_argument("--reserve", type=int, default=20, help="dừng khi hạn mức còn ≤ số này")
     args = p.parse_args()
 
-    positions, _ = load_positions(SNAPSHOTS)
+    positions, _ = normalize_all(read_sources()[0])      # recorded + history samples
     mmsis = sorted({pos["mmsi"] for pos in positions})
     cache = load_cache()
     todo = [m for m in mmsis if m not in cache or cache[m].get("status") not in (200, 404)]

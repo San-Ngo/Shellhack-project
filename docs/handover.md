@@ -5,7 +5,8 @@ Trạng thái: 2026-09-27, `main` @ `9cef077` (sau PR #5). Kiểm thử: `python
 ## 1. Hàm cần gọi
 
 ```python
-from src.database import init_db, upsert_vessel, insert_crossing, get_recent_crossings, get_vessel
+from src.database import (init_db, upsert_vessel, insert_position, insert_crossing,
+                          get_recent_crossings, get_vessel, get_track)
 from src.normalizer import normalize_vesselapi
 from src.pipeline import load_positions, run
 ```
@@ -14,10 +15,12 @@ from src.pipeline import load_positions, run
 |---|---|
 | `init_db(path=None)` | Mở/tạo SQLite (`DB_PATH` trong `.env`, hoặc `":memory:"` khi test) |
 | `upsert_vessel(conn, position)` | Lưu vị trí mới nhất của tàu. Cùng MMSI → cập nhật; vị trí cũ hơn không đè vị trí mới |
+| `insert_position(conn, position, source=...)` | Lưu 1 vị trí vào lịch sử đường đi (`vessel_positions`). `True` = đã lưu, `False` = trùng `(mmsi, timestamp_utc)` |
+| `get_track(conn, mmsi)` | Mọi vị trí của 1 tàu, cũ nhất trước — dùng để vẽ đường đi |
 | `insert_crossing(conn, crossing, source=...)` | Lưu lượt vượt. `True` = đã lưu, `False` = trùng. Dữ liệu sai → `ValueError`, không ghi gì |
 | `get_recent_crossings(conn, limit=20)` | Lượt vượt mới nhất trước |
 | `load_positions(path)` | Đọc file snapshot → vị trí chuẩn, đã bỏ trùng và **sắp theo thời gian** |
-| `run(positions, conn, detector, source)` | Lưu tàu + gọi `detector.process_position()` + lưu lượt vượt |
+| `run(positions, conn, detector, source)` | Lưu tàu + lưu đường đi + gọi `detector.process_position()` + lưu lượt vượt |
 
 ## 2. Cấu trúc đối tượng
 
@@ -38,6 +41,30 @@ Lượt vượt (B → A) — khớp với output hiện tại của `CrossingDe
 - `ship_type`: **số nguyên AIS hoặc `null`**. Chuỗi như `"Cargo"` bị từ chối.
 - Chống trùng: khóa `(mmsi, crossing_time, direction)`.
 - `crossings.source`: `vesselapi-replay` (dữ liệu thật) hoặc `simulated` — pipeline tự gán theo file đầu vào.
+
+### Bảng trong SQLite
+
+| Bảng | Mỗi dòng là | Khóa chống trùng |
+|---|---|---|
+| `vessels` | vị trí **mới nhất** của 1 tàu | `mmsi` |
+| `vessel_positions` | **1 vị trí** trong đường đi của tàu (lịch sử) | `(mmsi, timestamp_utc)` |
+| `crossings` | 1 lượt vượt cổng | `(mmsi, crossing_time, direction)` |
+
+`vessel_positions.source` và `crossings.source`: `vesselapi-replay` (thật) hoặc `simulated`.
+
+Ví dụ đọc đường đi:
+```sql
+SELECT mmsi, ship_name, timestamp_utc, latitude, longitude, speed_knots, course_deg, source
+FROM vessel_positions ORDER BY mmsi, timestamp_utc;
+```
+
+### Chuyển database cho Người B
+
+A tạo database riêng cho B (dữ liệu thật + lượt vượt):
+```bash
+python3 -m src.pipeline --db samples/hormuz_watch_for_B.db --detector src.crossing_detector:CrossingDetector --gate "56.1,26.10,56.1,26.80"
+```
+Gửi file `samples/hormuz_watch_for_B.db` trực tiếp cho B (tin nhắn/Drive riêng). **Không commit, không đăng công khai** — dữ liệu VesselAPI không được phát tán lại. B đặt file vào thư mục repo rồi mở bằng `init_db("hormuz_watch_for_B.db")` hoặc `sqlite3`.
 
 ## 3. Cách chạy quy trình
 

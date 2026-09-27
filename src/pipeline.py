@@ -4,6 +4,7 @@
       -> normalize_vesselapi            (shared vessel object)
       -> drop duplicates, sort by time  (snapshots overlap ~10 min)
       -> upsert_vessel                  (SQLite: latest state per MMSI)
+      -> insert_position                (SQLite: vessel_positions, full track history)
       -> detector.process_position      (Person B's CrossingDetector)
       -> insert_crossing                (SQLite: crossings, de-duplicated)
 
@@ -25,7 +26,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from src.config import ROOT
-from src.database import init_db, insert_crossing, upsert_vessel
+from src.database import init_db, insert_crossing, insert_position, upsert_vessel
 from src.normalizer import normalize_vesselapi
 
 DEFAULT_SNAPSHOTS = ROOT / "samples" / "vesselapi_snapshots.jsonl"
@@ -77,13 +78,18 @@ def load_positions(path: Path) -> tuple:
 
 def run(positions: Iterable[dict], conn, detector=None, source: str = "vesselapi-replay") -> dict:
     """Push positions through storage and (optionally) Person B's detector."""
-    stats = {"stored_positions": 0, "rejected_positions": 0, "detector_errors": 0,
+    stats = {"stored_positions": 0, "rejected_positions": 0,
+             "track_positions_stored": 0, "track_positions_duplicate": 0, "detector_errors": 0,
              "events": 0, "crossings_stored": 0, "crossings_duplicate": 0,
              "crossings_rejected": 0, "errors": []}
     for pos in positions:
         try:
             upsert_vessel(conn, pos)
             stats["stored_positions"] += 1
+            if insert_position(conn, pos, source=source):
+                stats["track_positions_stored"] += 1
+            else:
+                stats["track_positions_duplicate"] += 1
         except ValueError as e:
             stats["rejected_positions"] += 1
             stats["errors"].append(f"vessel {pos.get('mmsi')}: {e}")
@@ -178,7 +184,7 @@ def main() -> int:
     conn.close()
 
     label = "THẬT (VesselAPI, phát lại)" if load_stats["real_data"] else "MÔ PHỎNG (không phải dữ liệu thật)"
-    print(f"Dữ liệu: {label} | nhãn lưu vào crossings.source = {source!r}")
+    print(f"Dữ liệu: {label} | nhãn source = {source!r}")
     print(f"  {load_stats['snapshots']} lần chụp, {load_stats['records']} bản ghi → "
           f"{load_stats['positions']} vị trí của {load_stats['vessels']} tàu "
           f"(bỏ {load_stats['duplicates']} trùng, {load_stats['skipped']} không hợp lệ)")
@@ -188,6 +194,8 @@ def main() -> int:
         print(f"  bỏ qua {n}: {reason}")
     print(f"Đã lưu {run_stats['stored_positions']} vị trí vào bảng vessels "
           f"({run_stats['rejected_positions']} bị từ chối)")
+    print(f"Bảng vessel_positions (đường đi): thêm {run_stats['track_positions_stored']}, "
+          f"trùng {run_stats['track_positions_duplicate']} | nhãn source = {source!r}")
     if detector is None:
         print("Detector: CHƯA DÙNG — chưa đánh giá lượt vượt cổng.")
     else:
