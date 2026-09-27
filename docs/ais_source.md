@@ -82,3 +82,10 @@ Lý do thử: một project Hormuz khác cũng nhận 0 bản tin ở Vịnh t�
 - **Không có SLA**, không phát lại sự kiện đã mất → cần tự kết nối lại (backoff + jitter).
 - Không được kết nối trực tiếp từ trình duyệt; khóa chỉ ở phía máy chủ.
 - Điều khoản sử dụng chi tiết: chưa đọc — xem trước khi demo công khai.
+
+## Dữ liệu quá khứ (kiểm tra 2026-09-27 03:54 UTC)
+
+- `time.from` / `time.to` (RFC3339, tối đa 4 giờ/lần) **lấy được dữ liệu 7 ngày trước**: cửa sổ 2026-09-20 03:00–07:00 UTC → 44 vị trí của 9 tàu (03:05–05:04 UTC), 1 trang, tốn 1 lượt.
+- **Vùng có dữ liệu giống hệt hôm nay:** lat 26.01–26.30, lon 56.00–56.21 (dải sát bờ tây Musandam). Không có vị trí nào ở phần đông của khung (lon 56.21–56.9), nơi các luồng tàu chính đi qua.
+- Tàu có di chuyển (4–5 km) nhưng chủ yếu theo hướng bắc–nam sát bờ; **0 lượt cắt cổng tạm lon 56.1 (lat 26.10–26.80)**.
+- Kết luận: hai thời điểm cách nhau 7 ngày cho cùng một vùng phủ → nhiều khả năng là **giới hạn vùng thu của nguồn (trạm mặt đất)**, không phải do thời điểm. Lấy thêm dữ liệu quá khứ khó tạo ra lượt vượt eo thật. VesselAPI có tùy chọn vệ tinh (`filter.sat=true`, trả phí bằng satellite credits) — chưa dùng.
