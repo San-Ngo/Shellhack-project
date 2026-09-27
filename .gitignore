@@ -20,3 +20,7 @@ venv/
 
 # Raw AIS samples (local only until reviewed)
 samples/
+
+__pycache__/
+*.py[cod]
+.env
