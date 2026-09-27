@@ -1,3 +1,26 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Raw AIS samples (local only until reviewed)
+samples/
+
 __pycache__/
 *.py[cod]
 .env
