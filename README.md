@@ -13,7 +13,7 @@ Phần dữ liệu (Người A): nguồn AIS → chuẩn hóa → detector vư�
 | GIỜ 2–3.5: chuẩn hóa (`src/normalizer.py`) | ✅ |
 | GIỜ 3.5–4.5: SQLite (`src/database.py`) | ✅ bảng `vessels`, `crossings` |
 | GIỜ 4.5–5: ghép với Người B (`src/pipeline.py`) | ✅ chạy với `src/crossing_detector.py` của B |
-| GIỜ 5–6: kiểm tra đầu cuối, bàn giao | ✅ 65 ca kiểm thử; **1 lượt vượt thật**; bàn giao: `docs/handover.md` |
+| GIỜ 5–6: kiểm tra đầu cuối, bàn giao | ✅ 68 ca kiểm thử; **1 lượt vượt thật**; bàn giao: `docs/handover.md` |
 
 ## Cài đặt
 
@@ -81,11 +81,11 @@ python3 -m src.pipeline --snapshots demo/simulated_tracks.jsonl --detector src.c
 python3 -m pytest -q
 ```
 
-Kết quả mong đợi: `65 passed`.
+Kết quả mong đợi: `68 passed`.
 
 ## Dữ liệu thật hay mô phỏng
 
-- **Thật (VesselAPI):** 26/9 21:55 → 27/9 04:09 UTC → 226 vị trí của 14 tàu; 7 ngày trước (20/9 03:05–05:04 UTC) → 44 vị trí của 9 tàu. Chỉ nằm trong `samples/` trên máy ghi.
+- **Thật (VesselAPI):** 26/9 21:55 → 27/9 04:40 UTC → 251 vị trí của 14 tàu; 7 ngày trước (20/9 03:05–05:04 UTC) → 44 vị trí của 9 tàu. Chỉ nằm trong `samples/` trên máy ghi.
 - **Mô phỏng:** `demo/simulated_tracks.jsonl` (MMSI `99900…`, tên `SIM-…`, `real_data: false`) và mọi bản ghi trong `tests/`. `tests/stub_detector.py` chỉ là stub để test đường ống.
 - **Lượt vượt thật đầu tiên:** tàu AL- NOOR (MMSI 616002462) cắt cổng tạm lúc 27/9 03:33 UTC, hướng `OUTBOUND` (11 vị trí liên tục, ~7,3 hải lý/giờ, không có cờ nghi lỗi). Các lượt vượt trong `demo/` là mô phỏng.
 
@@ -96,7 +96,7 @@ Kết quả mong đợi: `65 passed`.
 - **Không có loại tàu:** endpoint đang dùng không trả loại tàu → `ship_type` luôn `NULL`. Không đoán; `NULL` ≠ "không phải tanker".
 - **Chất lượng dữ liệu:** có tàu báo tốc độ 12 hải lý/giờ nhưng vị trí đứng yên (NAUTILUS I, 25 vị trí trùng). Bản ghi `suspected_glitch` bị bỏ.
 - **aisstream.io:** kết nối và khóa hợp lệ nhưng 0 bản tin ở Hormuz (2 lần thử, 26/9). `src/ais_listener.py` giữ lại nhưng không dùng.
-- **Detector (Người B):** hướng `INBOUND` (kinh độ giảm) / `OUTBOUND` (kinh độ tăng). Còn lỗi: một vị trí nằm **đúng trên đường cổng** làm lượt vượt bị bỏ sót. Chi tiết: `docs/handover.md`.
+- **Detector (Người B):** hướng `INBOUND` (kinh độ giảm) / `OUTBOUND` (kinh độ tăng). Lỗi bỏ sót khi vị trí nằm đúng trên cổng đã sửa ở PR #3. Chưa có test cho trường hợp nhiều vị trí liên tiếp trên cổng và khoảng trống > `max_gap_minutes` (đã thử tay: đúng). Chi tiết: `docs/handover.md`.
 - **Khóa API:** chưa bao giờ vào Git (đã quét toàn bộ lịch sử), nhưng từng bị dán vào chat → nên tạo khóa mới.
 
 ## Tài liệu
