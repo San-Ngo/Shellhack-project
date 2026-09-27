@@ -141,15 +141,17 @@ def test_touching_gate_then_returning_to_same_side_is_not_crossing():
     assert detector.process_position(before_gate) is None
     assert detector.process_position(on_gate) is None
     assert detector.process_position(back_to_same_side) is None
+
+
 def test_multiple_positions_on_gate_produce_one_crossing():
     detector = CrossingDetector(GATE_COORDINATES)
 
     positions = [
-        simulated_position("SIM-ON-GATE", 56.0, "2026-09-26T21:55:00Z"),
-        simulated_position("SIM-ON-GATE", 56.1, "2026-09-26T22:00:00Z"),
-        simulated_position("SIM-ON-GATE", 56.1, "2026-09-26T22:05:00Z"),
-        simulated_position("SIM-ON-GATE", 56.1, "2026-09-26T22:10:00Z"),
-        simulated_position("SIM-ON-GATE", 56.2, "2026-09-26T22:15:00Z"),
+        simulated_position("999000006", 56.0, "2026-09-26T21:55:00Z"),
+        simulated_position("999000006", 56.1, "2026-09-26T22:00:00Z"),
+        simulated_position("999000006", 56.1, "2026-09-26T22:05:00Z"),
+        simulated_position("999000006", 56.1, "2026-09-26T22:10:00Z"),
+        simulated_position("999000006", 56.2, "2026-09-26T22:15:00Z"),
     ]
 
     events = [detector.process_position(p) for p in positions]
@@ -163,13 +165,13 @@ def test_gap_over_maximum_time_does_not_count_as_crossing():
     detector = CrossingDetector(GATE_COORDINATES)
 
     before_gap = simulated_position(
-        "SIM-LONG-GAP", 56.0, "2026-09-26T21:55:00Z"
+        "999000007", 56.0, "2026-09-26T21:55:00Z"
     )
     after_gap = simulated_position(
-        "SIM-LONG-GAP", 56.2, "2026-09-26T22:40:00Z"
+        "999000007", 56.2, "2026-09-26T22:40:00Z"
     )
     next_position = simulated_position(
-        "SIM-LONG-GAP", 56.3, "2026-09-26T22:45:00Z"
+        "999000007", 56.3, "2026-09-26T22:45:00Z"
     )
 
     assert detector.process_position(before_gap) is None
