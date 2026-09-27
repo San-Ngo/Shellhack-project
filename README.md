@@ -1,132 +1,135 @@
-# Shellhack-project — HORMUZ WATCH
+# HORMUZ WATCH — Hormuz Maritime Market Intelligence
 
-HACKATHON PROJECT — HORMUZ MARITIME MARKET INTELLIGENCE
+ShellHacks hackathon project. We track tanker traffic in the Strait of Hormuz with real AIS data, detect vessels crossing a virtual gate, and compare it with oil flow and Brent prices in a Power BI dashboard.
 
-Data part (Person A): AIS source → normalization → gate-crossing detector (Person B) → SQLite.
+## Dashboard
 
-## 6-hour foundation status
+[View the interactive Power BI dashboard](https://app.powerbi.com/view?r=eyJrIjoiMzA5Y2I1NWMtNmY4NC00ZWMwLWExNmMtMzEwZTk1NzhkMzk1IiwidCI6ImFjNzllNWE4LWUwZTQtNDM0Yi1hMjkyLTJjODliNWMyODM2NiIsImMiOjF9)
 
-| Step | Status |
+![Dashboard Overview](dashboard/dashboard_overview.jpg)
+
+Daily tanker traffic, estimated oil flow, Brent price and oil flow–price elasticity (12–27 Sep 2026), with tanker locations on Azure Maps. Details: [`dashboard/README.md`](dashboard/README.md).
+
+## Workflow
+
+```
+1. Collect AIS        VesselAPI ──► samples/ (raw snapshots, git-ignored)
+2. Vessel types       VesselAPI vessel lookup ──► tanker / not tanker / unknown
+3. Detect crossings   normalizer ──► gate-crossing detector ──► SQLite
+4. Market data        IMF PortWatch (daily transits) + FRED (daily Brent)
+5. Export             build_excel.py ──► Excel: Tanker | Oil | Oil Price (joined on Date)
+6. Dashboard          Power BI (Import) + Azure Maps ──► published link above
+```
+
+| Step | What happens | Code |
+|---|---|---|
+| 1. Collect AIS | Pull vessel positions in a Hormuz bounding box, now and for past days | `src/vesselapi_recorder.py`, `scripts/fetch_history.py` |
+| 2. Vessel types | The position feed has no vessel type, so each MMSI is looked up once; anything unconfirmed stays *Unknown* | `scripts/fetch_vessel_details.py` |
+| 3. Detect crossings | Normalize positions, drop glitches and duplicates, check if a vessel's path crosses the gate → `INBOUND` / `OUTBOUND` | `src/normalizer.py`, `src/crossing_detector.py`, `src/pipeline.py`, `src/database.py` |
+| 4. Market data | Daily Hormuz transits and trade volume (IMF PortWatch), daily Brent spot price (FRED/EIA) | `scripts/fetch_portwatch.py`, `src/brent_loader.py` |
+| 5. Export | One Excel file for Power BI, one row per day or vessel, empty cells = not available | `scripts/build_excel.py` |
+| 6. Dashboard | Power BI report with KPIs, trends, elasticity and a tanker map | `dashboard/hormuz_dashboard.pbix` |
+
+## Key results
+
+| Metric | Value |
 |---|---|
-| HOUR 0–1: choose source, configuration, data interface | ✅ `docs/ais_source.md`, `docs/data_contract.md` |
-| HOUR 1–2: receive AIS | ✅ aisstream.io: 0 messages in Hormuz → **VesselAPI: real data** |
-| HOUR 2–3.5: normalization (`src/normalizer.py`) | ✅ |
-| HOUR 3.5–4.5: SQLite (`src/database.py`) | ✅ tables `vessels`, `crossings` |
-| HOUR 4.5–5: integrate with Person B (`src/pipeline.py`) | ✅ runs with B's `src/crossing_detector.py` |
-| HOUR 5–6: end-to-end check, handover | ✅ 70 tests (now 125); **1 real crossing**; handover: `docs/handover.md` |
+| Real AIS window | 26/9 21:55 → 27/9 05:10 UTC |
+| Raw records → unique positions | 683 → 266 |
+| Vessels tracked | 14 |
+| Real gate crossings | **1** — AL- NOOR (MMSI 616002462), 27/9 03:33 UTC, `OUTBOUND` |
+| Simulated demo | 21 positions, 3 vessels, 2 crossings (1 per direction) |
+| Automated tests | 125 passed |
 
-## Installation
+## Run it
 
+**Setup** (on Mac use `python3`, not `python`)
 ```bash
 python3 -m pip install -r requirements.txt
 ```
-
-On Mac use `python3`, not `python`.
-
-## Create `.env`
-
 ```bash
 cp .env.example .env
 ```
-```bash
-open -e .env
-```
+Put your VesselAPI key in `.env` (`VESSELAPI_KEY=`, from https://dashboard.vesselapi.com/). `.env` is git-ignored.
 
-Paste your key into `VESSELAPI_KEY=` (create one at https://dashboard.vesselapi.com/). `.env` is in `.gitignore`. **Never paste the key into chat, code or GitHub.**
-
-## Record real data (VesselAPI)
-
-Single test snapshot:
-```bash
-python3 -m src.vesselapi_recorder --once
-```
-
-Record continuously, every 30 minutes, max 36 calls:
-```bash
-caffeinate -i python3 -m src.vesselapi_recorder --interval 1800 --max-calls 36
-```
-
-- Each call returns positions from the **last 2 hours**, newest first. Each page ≤ 50 positions = 1 call.
-- The recorder stops itself when `--max-calls` is used up or when the monthly quota is ≤ 20.
-- Data: `samples/vesselapi_snapshots.jsonl`. Log and errors: `samples/recorder.log`. Neither is **committed** (VesselAPI terms).
-
-Try fetching historical data (1 call, 4-hour window):
-```bash
-python3 scripts/probe_history.py --days-ago 7
-```
-
-## Replay into SQLite
-
-**Real** data, vessels only:
-```bash
-python3 -m src.pipeline
-```
-
-**Real** data + Person B's detector:
-```bash
-python3 -m src.pipeline --detector src.crossing_detector:CrossingDetector --gate "56.1,26.10,56.1,26.80"
-```
-
-Detector demo with **simulated** data (automatically sets `source = simulated`):
+**Try it without an API key** (simulated data)
 ```bash
 python3 -m src.pipeline --snapshots demo/simulated_tracks.jsonl --detector src.crossing_detector:CrossingDetector --gate "56.1,26.10,56.1,26.80"
 ```
 
-- SQLite has 3 tables: `vessels` (latest position per vessel), `vessel_positions` (full tracks), `crossings` (crossings). Re-running creates no duplicate rows.
-- Gate order is **longitude, latitude**. The gate above is a **temporary gate** proposed by Person B.
-- Results are saved to `hormuz_watch.db` (not committed).
+**Full workflow with real data**
 
-## Azure SQL + Power BI (continuously updated)
+1. Collect AIS:
+   ```bash
+   python3 -m src.vesselapi_recorder --once
+   ```
+   ```bash
+   python3 scripts/fetch_history.py
+   ```
+2. Vessel types:
+   ```bash
+   python3 scripts/fetch_vessel_details.py --max-calls 20
+   ```
+3. Detect crossings:
+   ```bash
+   python3 -m src.pipeline --detector src.crossing_detector:CrossingDetector --gate "56.1,26.10,56.1,26.80"
+   ```
+4. Market data + 5. Excel export (PortWatch and Brent are downloaded automatically):
+   ```bash
+   python3 scripts/build_excel.py --start 2026-09-12 --end 2026-09-27 --refresh
+   ```
+   Output: `samples/powerbi/hormuz_watch_<start>_<end>.xlsx`
+6. Open `dashboard/hormuz_dashboard.pbix` in Power BI Desktop and refresh it with the new Excel file.
 
-VesselAPI → normalization → Person B's detector → Azure SQL (`vessels_latest`, `crossings`, `vessel_metadata`, `brent_daily`, `ingestion_status`) → Power BI Azure Maps. Full guide: `docs/azure_setup.md`.
-
-```bash
-python3 -m src.azure_store --check
-```
-```bash
-caffeinate -i python3 -m src.live_ingest --interval 1800
-```
-
-Not yet tested against a real Azure SQL — see the limits in `docs/azure_setup.md`.
-
-## Power BI dashboard
-
-Oil flow, tanker traffic, Brent price and oil flow–price elasticity (12–27 Sep 2026), with tanker locations on Azure Maps. Built by Dac Kha Nguyen (Person B).
-
-[View the Interactive Power BI Dashboard](https://app.powerbi.com/view?r=eyJrIjoiMzA5Y2I1NWMtNmY4NC00ZWMwLWExNmMtMzEwZTk1NzhkMzk1IiwidCI6ImFjNzllNWE4LWUwZTQtNDM0Yi1hMjkyLTJjODliNWMyODM2NiIsImMiOjF9)
-
-![Dashboard Overview](dashboard/dashboard_overview.jpg)
-
-Files and details: `dashboard/` (`hormuz_dashboard.pbix`, `README.md`).
-
-## Tests
-
+**Tests**
 ```bash
 python3 -m pytest -q
 ```
 
-Expected result: `125 passed`.
+Notes:
+- Gate coordinates are **longitude, latitude**. The gate above is a temporary gate.
+- The free plan allows 150 API calls/month; the scripts stop early to keep a reserve.
+- Recorded data and exports (`samples/`) and databases (`*.db`) are never committed (VesselAPI terms).
+
+## Optional: live pipeline (Azure SQL)
+
+We also built a live version that runs every 30 minutes and writes to Azure SQL (`vessels_latest`, `crossings`, `brent_daily`, `ingestion_status`) for Power BI DirectQuery. The published dashboard uses the Excel export above; the live path is tested with a fake store but not yet against a real Azure SQL database. Setup: [`docs/azure_setup.md`](docs/azure_setup.md).
 
 ## Real vs simulated data
 
-- **Real (VesselAPI):** 26/9 21:55 → 27/9 05:10 UTC → 266 positions from 14 vessels; 7 days earlier (20/9 03:05–05:04 UTC) → 44 positions from 9 vessels. Stored only in `samples/` on the recording machine.
-- **Simulated:** `demo/simulated_tracks.jsonl` (MMSI `99900…`, names `SIM-…`, `real_data: false`) and every record in `tests/`. `tests/stub_detector.py` is only a stub for testing the pipeline.
-- **First real crossing:** the vessel AL- NOOR (MMSI 616002462) crossed the temporary gate at 27/9 03:33 UTC, direction `OUTBOUND` (11 consecutive positions, ~7.3 knots, no glitch flags). The crossings in `demo/` are simulated.
+- **Real:** VesselAPI positions (recorder + sampled past days), IMF PortWatch transits, FRED Brent prices. Raw AIS files stay on the recording machine.
+- **Estimated:** daily oil flow in barrels = PortWatch tanker trade volume × 7.33 bbl/t (crude average). AIS carries no cargo data.
+- **Simulated:** `demo/simulated_tracks.jsonl` (MMSI `99900…`, names `SIM-…`) and all records in `tests/`. Every stored row has a `source` column, so real and simulated data never mix.
 
 ## Known limits
 
-- **Coverage:** VesselAPI (free plan, terrestrial stations) only has vessels along the west coast of Musandam (lat 26.0–26.8, mostly lon 56.00–56.21). The main lanes in the middle of the strait have **no data**, both today and 7 days ago. Satellite AIS (`filter.sat=true`) costs extra and isn't used yet.
-- **Quota:** 150 calls/month. Filter box total `|dLat| + |dLon|` ≤ 4°. Each time query ≤ 4 hours.
-- **No vessel type:** the endpoint in use doesn't return vessel type → `ship_type` is always `NULL`. No guessing; `NULL` ≠ "not a tanker".
-- **Data quality:** some vessels report 12 knots while their position stays still (NAUTILUS I, 25 identical positions). `suspected_glitch` records are dropped.
-- **aisstream.io:** connection and key valid but 0 messages in Hormuz (2 attempts, 26/9). `src/ais_listener.py` is kept but unused.
-- **Detector (Person B):** direction `INBOUND` (longitude decreasing) / `OUTBOUND` (longitude increasing). The missed-crossing bug when a position lies exactly on the gate was fixed in PR #3, with regression tests (PR #4–#5). End-to-end test record: `docs/handover.md` section 3.
-- **API key:** never entered Git (full history scanned), but was once pasted into a chat → create a new key.
+- **Coverage:** the free VesselAPI feed (terrestrial stations) only sees the west coast of Musandam, not the main shipping lanes. Tanker counts are vessels *seen* there, not total strait traffic. Satellite AIS would fix this but costs extra.
+- **Gate:** temporary (lon 56.1, lat 26.10–26.80); official gate coordinates are not set.
+- **Delays:** PortWatch publishes weekly with a lag, so the latest days can be empty. Brent is a daily price with no weekend values.
+- **Correlation, not causation:** the elasticity view shows how oil flow and prices moved together in this period only.
+- **aisstream.io** was tried first but returned 0 messages for Hormuz; `src/ais_listener.py` is kept but unused.
+
+## Team
+
+- **Bao Nam San Ngo** — data pipeline: AIS collection, normalizer, databases, exports, Azure SQL
+- **Dac Kha Nguyen** — Hormuz gate and crossing detector, Power BI dashboard
+
+## Repository structure
+
+```
+src/         pipeline code (recorder, normalizer, detector, databases, live ingest, Brent loader)
+scripts/     data collection and export tools (history, vessel types, PortWatch, Excel/CSV)
+dashboard/   Power BI file, screenshot and dashboard notes
+sql/         Azure SQL schema (optional live pipeline)
+demo/        simulated tracks (clearly labeled)
+docs/        detailed documentation
+tests/       automated tests
+```
 
 ## Docs
 
-- `docs/ais_source.md` — AIS source, verified fields, test log, coverage
-- `docs/data_contract.md` — vessel position and crossing objects shared with Person B
-- `docs/azure_setup.md` — Azure SQL, scheduled job, Power BI
-- `docs/handover.md` — handover to Person B: functions, structure, how to run, open issues
-- `dashboard/README.md` — Power BI dashboard: metrics, approach, analytical notes
+- [`docs/ais_source.md`](docs/ais_source.md) — AIS source research, verified fields, coverage
+- [`docs/data_contract.md`](docs/data_contract.md) — shared position and crossing formats
+- [`docs/handover.md`](docs/handover.md) — functions, tables, how to run, end-to-end test record
+- [`docs/azure_setup.md`](docs/azure_setup.md) — optional Azure SQL live pipeline
+- [`dashboard/README.md`](dashboard/README.md) — dashboard metrics, approach, analytical notes
