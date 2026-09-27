@@ -51,10 +51,15 @@ stored = insert_crossing(conn, crossing, source="vesselapi-replay")  # True = đ
 - Gửi lại cùng `(mmsi, crossing_time, direction)` → không ghi lặp, trả về `False`.
 - `source`: `"vesselapi-live"`, `"vesselapi-replay"` hoặc `"simulated"` — để luôn biết sự kiện đến từ dữ liệu nào.
 
-## Cần B xác nhận
+## Đã thống nhất với B (2026-09-26 tối)
 
-1. `direction` dùng giá trị nào? Đề xuất: `"INBOUND"` / `"OUTBOUND"` (vào / ra vịnh Ba Tư).
-2. `crossing_time` cũng là chuỗi ISO UTC có `Z`?
-3. `latitude/longitude` của lượt vượt là điểm giao với cổng hay vị trí gần nhất?
-4. Có nhiều cổng không? Nếu có, thêm trường `gate_id`.
-5. Chống ghi lặp: A đề xuất khóa duy nhất `(mmsi, crossing_time, direction)`.
+- **Cách gọi:** `detector = CrossingDetector(gate_coordinates=[(lon1, lat1), (lon2, lat2)])`, rồi `detector.process_position(position)` cho từng vị trí → sự kiện hoặc `None`. Detector tự nhớ vị trí trước theo MMSI. **Gửi theo thứ tự thời gian** — `src/pipeline.py` đã bỏ trùng và sắp xếp trước khi gửi.
+- **Thứ tự tọa độ cổng: (kinh độ, vĩ độ).**
+- **`crossing_time`:** hiện là thời gian của vị trí thứ hai, dạng `+00:00`. `insert_crossing` tự đổi sang `Z` — không cần sửa.
+- **`latitude/longitude` của sự kiện:** điểm giao với đường cổng.
+
+## Còn mở (B phụ trách)
+
+1. **`direction`:** code hiện trả `EASTBOUND`/`WESTBOUND` (theo kinh độ tăng/giảm), chưa tương đương `INBOUND`/`OUTBOUND`. Database lưu được cả hai, nhưng **chưa dựa vào nhãn hướng** cho đến khi B chốt phía nào là Vịnh Ba Tư.
+2. **Tọa độ cổng Hormuz thật:** chưa có (test của B dùng đường giả lập). Pipeline từ chối chạy detector nếu thiếu cổng.
+   - Lưu ý từ dữ liệu thật (21:55–23:59 UTC): vị trí mới nhất của cả 9 tàu nằm ở **kinh độ 56.00–56.21**, vĩ độ 26.00–26.81 — sát mép tây khung ghi. Cổng nên nằm trong vùng thực sự có dữ liệu, hoặc cần ghi thêm/đổi khung trước khi chốt.
