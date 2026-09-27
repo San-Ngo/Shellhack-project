@@ -89,6 +89,16 @@ caffeinate -i python3 -m src.live_ingest --interval 1800
 
 Not yet tested against a real Azure SQL — see the limits in `docs/azure_setup.md`.
 
+## Power BI dashboard
+
+Oil flow, tanker traffic, Brent price and oil flow–price elasticity (12–27 Sep 2026), with tanker locations on Azure Maps. Built by Dac Kha Nguyen (Person B).
+
+[View the Interactive Power BI Dashboard](https://app.powerbi.com/view?r=eyJrIjoiMzA5Y2I1NWMtNmY4NC00ZWMwLWExNmMtMzEwZTk1NzhkMzk1IiwidCI6ImFjNzllNWE4LWUwZTQtNDM0Yi1hMjkyLTJjODliNWMyODM2NiIsImMiOjF9)
+
+![Dashboard Overview](dashboard/dashboard_overview.jpg)
+
+Files and details: `dashboard/` (`hormuz_dashboard.pbix`, `README.md`).
+
 ## Tests
 
 ```bash
@@ -119,3 +129,4 @@ Expected result: `125 passed`.
 - `docs/data_contract.md` — vessel position and crossing objects shared with Person B
 - `docs/azure_setup.md` — Azure SQL, scheduled job, Power BI
 - `docs/handover.md` — handover to Person B: functions, structure, how to run, open issues
+- `dashboard/README.md` — Power BI dashboard: metrics, approach, analytical notes
