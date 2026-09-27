@@ -89,3 +89,10 @@ Lý do thử: một project Hormuz khác cũng nhận 0 bản tin ở Vịnh t�
 - **Vùng có dữ liệu giống hệt hôm nay:** lat 26.01–26.30, lon 56.00–56.21 (dải sát bờ tây Musandam). Không có vị trí nào ở phần đông của khung (lon 56.21–56.9), nơi các luồng tàu chính đi qua.
 - Tàu có di chuyển (4–5 km) nhưng chủ yếu theo hướng bắc–nam sát bờ; **0 lượt cắt cổng tạm lon 56.1 (lat 26.10–26.80)**.
 - Kết luận: hai thời điểm cách nhau 7 ngày cho cùng một vùng phủ → nhiều khả năng là **giới hạn vùng thu của nguồn (trạm mặt đất)**, không phải do thời điểm. Lấy thêm dữ liệu quá khứ khó tạo ra lượt vượt eo thật. VesselAPI có tùy chọn vệ tinh (`filter.sat=true`, trả phí bằng satellite credits) — chưa dùng.
+
+## Lượt vượt cổng thật đầu tiên (kiểm tra 2026-09-27 04:21 UTC)
+
+- Dữ liệu ghi 26/9 21:55 → 27/9 04:09 UTC: 483 bản ghi → 226 vị trí của 14 tàu; 5 bị bỏ vì `suspected_glitch`.
+- Detector của Người B (cổng tạm lon 56.1, lat 26.10–26.80) → **1 lượt**: AL- NOOR (MMSI 616002462), 03:33:26 UTC, `OUTBOUND`, giao cổng tại lat 26.193.
+- Kiểm tra độ tin cậy: 11 vị trí liên tục 02:47–04:01 UTC, tốc độ ổn định ~7,3 hải lý/giờ, hướng đông bắc (cog 40–58°), không có cờ nghi lỗi; cắt lon 56.1 giữa 03:19 (56.084) và 03:33 (56.108).
+- `ship_type` vẫn `NULL` (nguồn không có loại tàu) → không biết có phải tanker.

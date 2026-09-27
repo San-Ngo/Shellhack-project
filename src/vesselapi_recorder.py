@@ -41,8 +41,18 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+LOG_FILE = ROOT / "samples" / "recorder.log"   # every line is also kept here (git-ignored)
+
+
 def log(msg: str) -> None:
-    print(f"[{now_utc()}] {msg}", flush=True)
+    line = f"[{now_utc()}] {msg}"
+    print(line, flush=True)
+    try:
+        LOG_FILE.parent.mkdir(exist_ok=True)
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass  # logging to file must never stop the recorder
 
 
 def load_key() -> str:

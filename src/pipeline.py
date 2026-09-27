@@ -149,7 +149,9 @@ def main() -> int:
     p.add_argument("--detector", default=os.getenv("DETECTOR"),
                    help="Person B's detector, e.g. detector:CrossingDetector")
     p.add_argument("--gate", default=os.getenv("GATE_COORDINATES"), help="lon1,lat1,lon2,lat2")
-    p.add_argument("--source", default="vesselapi-replay")
+    p.add_argument("--source", default=None,
+                   help="label stored with crossings (default: vesselapi-replay for real data, "
+                        "simulated otherwise)")
     args = p.parse_args()
 
     path = Path(args.snapshots)
@@ -170,12 +172,13 @@ def main() -> int:
             return 1
 
     positions, load_stats = load_positions(path)
+    source = args.source or ("vesselapi-replay" if load_stats["real_data"] else "simulated")
     conn = init_db(args.db)
-    run_stats = run(positions, conn, detector, source=args.source)
+    run_stats = run(positions, conn, detector, source=source)
     conn.close()
 
-    label = "THẬT (VesselAPI, phát lại)" if load_stats["real_data"] else "CÓ DỮ LIỆU KHÔNG PHẢI THẬT"
-    print(f"Dữ liệu: {label}")
+    label = "THẬT (VesselAPI, phát lại)" if load_stats["real_data"] else "MÔ PHỎNG (không phải dữ liệu thật)"
+    print(f"Dữ liệu: {label} | nhãn lưu vào crossings.source = {source!r}")
     print(f"  {load_stats['snapshots']} lần chụp, {load_stats['records']} bản ghi → "
           f"{load_stats['positions']} vị trí của {load_stats['vessels']} tàu "
           f"(bỏ {load_stats['duplicates']} trùng, {load_stats['skipped']} không hợp lệ)")
