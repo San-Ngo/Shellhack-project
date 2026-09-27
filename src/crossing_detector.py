@@ -67,10 +67,10 @@ class CrossingDetector:
 
         intersection = path.intersection(self.gate)
 
-        if current["longitude"] > previous["longitude"]:
-            direction = "EASTBOUND"
-        elif current["longitude"] < previous["longitude"]:
-            direction = "WESTBOUND"
+        if current["longitude"] < previous["longitude"]:
+            direction = "INBOUND"
+        elif current["longitude"] > previous["longitude"]:
+            direction = "OUTBOUND"
         else:
             direction = "UNKNOWN"
 
